@@ -312,127 +312,127 @@ def run_nnar_pipeline(
 
 # On commence par faire le test qui permet d'optimiser l'ordre d'intégration 
   
-# def optimal_integration_order(time_series, max_order=3, alpha=0.05):
-#     """
-#     Imitation de 'optimal_integration_order' en R :
-#     répète le test KPSS pour déterminer d (ordre d'intégration).
-#     """
-#     def kpss_pvalue(series):
-#         stat, p_val, _, _ = kpss(series, regression='c')
-#         return p_val
+def optimal_integration_order_1(time_series, max_order=3, alpha=0.05):
+    """
+    Imitation de 'optimal_integration_order' en R :
+    répète le test KPSS pour déterminer d (ordre d'intégration).
+    """
+    def kpss_pvalue(series):
+        stat, p_val, _, _ = kpss(series, regression='c')
+        return p_val
 
-#     d = 0
-#     p_val = kpss_pvalue(time_series)
-#     if p_val < alpha:
-#         for order in range(1, max_order+1):
-#             diff_series = np.diff(time_series, n=order)
-#             try:
-#                 p_val_diff = kpss_pvalue(diff_series)
-#             except:
-#                 p_val_diff = 0.0
-#             if p_val_diff >= alpha:
-#                 d = order
-#                 break
-#     return d
+    d = 0
+    p_val = kpss_pvalue(time_series)
+    if p_val < alpha:
+        for order in range(1, max_order+1):
+            diff_series = np.diff(time_series, n=order)
+            try:
+                p_val_diff = kpss_pvalue(diff_series)
+            except:
+                p_val_diff = 0.0
+            if p_val_diff >= alpha:
+                d = order
+                break
+    return d
 
-# def find_best_arima_order(y, 
-#                           p_range=(0, 5), 
-#                           d_range=(0, 2), 
-#                           q_range=(0, 5), 
-#                           ic='aic'):
-#     """
-#     Recherche brute de (p, d, q) minimisant un critère (AIC ou BIC) 
-#     via SARIMAX de statsmodels, sans pmdarima.
+def find_best_arima_order_1(y, 
+                          p_range=(0, 5), 
+                          d_range=(0, 2), 
+                          q_range=(0, 5), 
+                          ic='aic'):
+    """
+    Recherche brute de (p, d, q) minimisant un critère (AIC ou BIC) 
+    via SARIMAX de statsmodels, sans pmdarima.
     
-#     y : la série univariée (numpy array ou pandas Series)
-#     p_range : tuple (min_p, max_p)
-#     d_range : tuple (min_d, max_d)
-#     q_range : tuple (min_q, max_q)
-#     ic : 'aic' ou 'bic'
+    y : la série univariée (numpy array ou pandas Series)
+    p_range : tuple (min_p, max_p)
+    d_range : tuple (min_d, max_d)
+    q_range : tuple (min_q, max_q)
+    ic : 'aic' ou 'bic'
     
-#     Retourne (p_best, d_best, q_best, best_ic_value)
-#     """
-#     best_ic = np.inf
-#     best_order = (0,0,0)
-#     for p in range(p_range[0], p_range[1]+1):
-#         for d in range(d_range[0], d_range[1]+1):
-#             for q in range(q_range[0], q_range[1]+1):
-#                 try:
-#                     model = sm.tsa.SARIMAX(y, order=(p,d,q), trend='n',
-#                                            enforce_stationarity=False,
-#                                            enforce_invertibility=False)
-#                     res = model.fit(disp=False)
-#                     if ic == 'aic':
-#                         current_ic = res.aic
-#                     else:
-#                         current_ic = res.bic
+    Retourne (p_best, d_best, q_best, best_ic_value)
+    """
+    best_ic = np.inf
+    best_order = (0,0,0)
+    for p in range(p_range[0], p_range[1]+1):
+        for d in range(d_range[0], d_range[1]+1):
+            for q in range(q_range[0], q_range[1]+1):
+                try:
+                    model = sm.tsa.SARIMAX(y, order=(p,d,q), trend='n',
+                                           enforce_stationarity=False,
+                                           enforce_invertibility=False)
+                    res = model.fit(disp=False)
+                    if ic == 'aic':
+                        current_ic = res.aic
+                    else:
+                        current_ic = res.bic
                         
-#                     if current_ic < best_ic:
-#                         best_ic = current_ic
-#                         best_order = (p,d,q)
-#                 except:
-#                     # Peut arriver si le modèle ne converge pas
-#                     continue
-#     return best_order[0], best_order[1], best_order[2], best_ic
+                    if current_ic < best_ic:
+                        best_ic = current_ic
+                        best_order = (p,d,q)
+                except:
+                    # Peut arriver si le modèle ne converge pas
+                    continue
+    return best_order[0], best_order[1], best_order[2], best_ic
 
-# def ss_kf_fit(returns, observed_volatility):
-#     """
-#     Reproduit la logique du script R:
-#     - Trouve d par test KPSS (sur 'returns', comme le code R)
-#     - Trouve (p,d,q) par auto_arima(returns, d=...)
-#     - Construit SARIMAX(endog=observed_volatility, order=(p,d,q))
-#     - Fit => applique KF en interne
-#     - Compare fitted_values vs. observed_volatility => MAE, RMSE
-#     - Fait un forecast(1-step)
-#     """
+def ss_kf_fit(returns, observed_volatility):
+    """
+    Reproduit la logique du script R:
+    - Trouve d par test KPSS (sur 'returns', comme le code R)
+    - Trouve (p,d,q) par auto_arima(returns, d=...)
+    - Construit SARIMAX(endog=observed_volatility, order=(p,d,q))
+    - Fit => applique KF en interne
+    - Compare fitted_values vs. observed_volatility => MAE, RMSE
+    - Fait un forecast(1-step)
+    """
 
-#     # Trouver d
-#     d_opt = 0  # par exemple, ou votre fonction optimal_integration_order()
-#     #Recherche (p, d, q) par mini-grid search sur 'returns'
-#     p_opt, d_opt, q_opt, best_ic = find_best_arima_order(
-#         returns, 
-#         p_range=(0,5), 
-#         d_range=(0,2), 
-#         q_range=(0,5), 
-#         ic='aic'
-#     )
-#     print(f"Best ARIMA order via grid search: p={p_opt}, d={d_opt}, q={q_opt} (AIC={best_ic:.2f})")
+    # Trouver d
+    d_opt = 0  # par exemple, ou votre fonction optimal_integration_order()
+    #Recherche (p, d, q) par mini-grid search sur 'returns'
+    p_opt, d_opt, q_opt, best_ic = find_best_arima_order_1(
+        returns, 
+        p_range=(0,5), 
+        d_range=(0,2), 
+        q_range=(0,5), 
+        ic='aic'
+    )
+    print(f"Best ARIMA order via grid search: p={p_opt}, d={d_opt}, q={q_opt} (AIC={best_ic:.2f})")
 
-#     # Construire un SARIMAX sur observed_volatility 
-#     #    => c'est statsmodels' state-space ARIMA
-#     sarimax_mod =    sm.tsa.statespace.SARIMAX(
-#         observed_volatility, 
-#         order=(p_opt, d_opt, q_opt),
-#         trend='n', 
-#         enforce_stationarity=False,
-#         enforce_invertibility=False
-#     )
+    # Construire un SARIMAX sur observed_volatility 
+    #    => c'est statsmodels' state-space ARIMA
+    sarimax_mod =    sm.tsa.statespace.SARIMAX(
+        observed_volatility, 
+        order=(p_opt, d_opt, q_opt),
+        trend='n', 
+        enforce_stationarity=False,
+        enforce_invertibility=False
+    )
 
-#     # Fit => MLE + Kalman Filter
-#     res = sarimax_mod.fit(disp=False)
+    # Fit => MLE + Kalman Filter
+    res = sarimax_mod.fit(disp=False)
 
-#     # Comparaison in-sample
-#     fitted_vals = res.fittedvalues  # .fittedvalues = E[y_t|t-1], version statsmodels
-#     # On calcule l'erreur vs. 'observed_volatility'
-#     residuals = observed_volatility - fitted_vals
-#     mae = np.mean(np.abs(residuals))
-#     rmse = np.sqrt(np.mean(residuals**2))
+    # Comparaison in-sample
+    fitted_vals = res.fittedvalues  # .fittedvalues = E[y_t|t-1], version statsmodels
+    # On calcule l'erreur vs. 'observed_volatility'
+    residuals = observed_volatility - fitted_vals
+    mae = np.mean(np.abs(residuals))
+    rmse = np.sqrt(np.mean(residuals**2))
 
-#     # 6) Forecast(1-step)
-#     forecast_1step = res.forecast(steps=1).iloc[0]
+    # Forecast(1-step)
+    forecast_1step = res.forecast(steps=1).iloc[0]
 
-#     return {
-#         'Model': res,
-#         'Fitted_values': fitted_vals,
-#         'Residuals': residuals,
-#         'Forecast_vals': forecast_1step,
-#         'MAE': mae,
-#         'RMSE': rmse,
-#         'ARIMA_order': (p_opt, d_opt, q_opt),
-#         'AIC': best_ic,
-#         # Coefficients estimés (AR, MA, etc.)
-#         'EstParams': res.params
-#     }
+    return {
+        'Model': res,
+        'Fitted_values': fitted_vals,
+        'Residuals': residuals,
+        'Forecast_vals': forecast_1step,
+        'MAE': mae,
+        'RMSE': rmse,
+        'ARIMA_order': (p_opt, d_opt, q_opt),
+        'AIC': best_ic,
+        # Coefficients estimés (AR, MA, etc.)
+        'EstParams': res.params
+    }
 
 ## --------------- SS ARIMA ALEX ----------------------
 
@@ -535,13 +535,13 @@ def ss_arima_kf_pipeline(volatility, obs_index=None):
     forecast_1step_mean = float(sum(out_of_sample_prior.mean[:ss_model.d]))
     forecast_1step_std = float(np.sqrt(sum(out_of_sample_prior.var[:ss_model.d, :ss_model.d])))
 
-    # 9) Return results in dictionary format
+    # Return results in dictionary format
     result_dict = {
         "Model": ss_model,
-        "Fitted_values": fitted_series,
+        "Fitted_values": np.sqrt(fitted_series),
         "Residuals": residuals_series,
         "Forecast_vals": {
-            "mean": forecast_1step_mean,
+            "mean": np.sqrt(forecast_1step_mean),
             "std": forecast_1step_std
         },
         "MAE": None,  

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import numpy as np 
 
 def plot_observed_vols(dict, title="Observed Volatilities for Tokens", subject="observed volatility"):
     """

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import t, norm
 from scipy.optimize import minimize
-def descriptive_statistics(returns_series,arima_params, nnar_params):
+def descriptive_statistics(returns_series,arima_params, nnar_params,arima_var_params):
     """
     Compute maximum, minimum, mean, median, std, skewness, kurtosis.
     """
@@ -20,6 +20,8 @@ def descriptive_statistics(returns_series,arima_params, nnar_params):
     # Ajout d'une colonne "arima_params" et "NNAR_Params"
     desc['ARIMA params'] = str(arima_params)
     desc['NNAR params']  = str(nnar_params)
+    desc['SS ARIMA Variance'] = str(arima_var_params)
+    
     
     return desc
 
@@ -156,8 +158,11 @@ def compute_volatility_ci(models_data, alpha_array):
     vol_values = []
     
     for model_name, model_dict in models_data.items():
-        fvals = model_dict["Forecast_vals"]  
-        vol_float = single_vol_value(fvals, method="first")
+        if model_name == "SS ARIMA Variance":
+            continue
+        else:
+            fvals = model_dict["Forecast_vals"]  
+            vol_float = single_vol_value(fvals, method="first")
         vol_values.append(vol_float)
 
     mean_vol = np.mean(vol_values)
@@ -166,25 +171,28 @@ def compute_volatility_ci(models_data, alpha_array):
     ci_dict = {}
     
     for model_name, model_data in models_data.items():
-        
-        rmse = model_data["RMSE"] / np.sqrt(10000) # On reprend la logique du code R, un ptf de 10K 
-        dist_type = "student" if model_name == "GARCH" else "normal"
-        df = model_data.get("Shape", None)
-
-        if dist_type =="student":
-            zvals = np.abs(t.ppf(alpha_array/2, df))
+        if model_name == "SS ARIMA Variance":
+            continue
         else:
-            zvals = np.abs(norm.ppf(alpha_array/2))
-        
-        lower_bound = mean_vol - zvals * rmse
-        upper_bound = mean_vol + zvals * rmse
-        
-        ci_dict[model_name] = pd.DataFrame(
-            {"lower": lower_bound, "upper": upper_bound},
-            index=alpha_aindex
-        )
-        
+            rmse = model_data["Forecast_vals"]["std"]/np.sqrt(10000) if model_name == "SS ARIMA Variance" else model_data["RMSE"] / np.sqrt(10000) # On reprend la logique du code R, un ptf de 10K 
+            dist_type = "student" if model_name == "GARCH" else "normal"
+            df = model_data.get("Shape", None)
+
+            if dist_type =="student":
+                zvals = np.abs(t.ppf(alpha_array/2, df))
+            else:
+                zvals = np.abs(norm.ppf(alpha_array/2))
+            
+            lower_bound = mean_vol - zvals * rmse
+            upper_bound = mean_vol + zvals * rmse
+            
+            ci_dict[model_name] = pd.DataFrame(
+                {"lower": lower_bound, "upper": upper_bound},
+                index=alpha_aindex
+            )
+            
     return ci_dict
+
 
 #----------- Version statistiquement correcte du calcul de la VaR ----------------
 def compute_var_ci(vol_ci_dict, alpha_array, models_data, alpha_var=0.01, nominal=10_000):
@@ -220,30 +228,33 @@ def compute_var_ci(vol_ci_dict, alpha_array, models_data, alpha_var=0.01, nomina
     alpha_index = pd.Index(alpha_array, name="alpha")
     
     for model_name, df_ci in vol_ci_dict.items():
-         dist_type = "student" if model_name == "GARCH" else "normal"
-         df = models_data[model_name].get("Shape", None)
-         #Two-sided IC 
-         
-         if dist_type == "student" and df is not None:
-            q = t.ppf(alpha_var/2, df)
-            # Facteur de student 
-            student_factor = np.sqrt((df-2)/df)
-         else: 
-            q = norm.ppf(alpha_var/2)
-            student_factor = 1.0
+        if model_name == "SS ARIMA Variance":
+            continue
+        else:
+            dist_type = "student" if model_name == "GARCH" else "normal"
+            df = models_data[model_name].get("Shape", None)
+            
+            #Two-sided IC 
+            if dist_type == "student" and df is not None:
+                q = t.ppf(alpha_var/2, df)
+                # Facteur de student 
+                student_factor = np.sqrt((df-2)/df)
+            else: 
+                q = norm.ppf(alpha_var/2)
+                student_factor = 1.0
 
-         vol_lower = df_ci["lower"].values
-         vol_upper = df_ci["upper"].values
+            vol_lower = df_ci["lower"].values
+            vol_upper = df_ci["upper"].values
 
-         #Calcul de la VaR
-         var_lower = - nominal * vol_lower * q * student_factor 
-         var_upper = - nominal * vol_upper * q * student_factor 
-         
-         var_ci_dict[model_name] = pd.DataFrame(
-             {"lower": var_lower, 
-              "upper": var_upper},
-             index=alpha_index
-         )    
+            #Calcul de la VaR
+            var_lower = - nominal * vol_lower * q * student_factor 
+            var_upper = - nominal * vol_upper * q * student_factor 
+            
+            var_ci_dict[model_name] = pd.DataFrame(
+                {"lower": var_lower, 
+                "upper": var_upper},
+                index=alpha_index
+            )    
          
     return var_ci_dict
 
@@ -288,18 +299,20 @@ def compute_var_ci_df(vol_ci_dict, alpha_array, models_data, alpha_var=0.01, nom
     student_factor = np.sqrt((df-2)/df)
 
     for model_name, df_ci in vol_ci_dict.items():
-         
-         vol_lower = df_ci["lower"].values
-         vol_upper = df_ci["upper"].values
+        if model_name == "SS ARIMA Variance":
+            continue
+        else:
+            vol_lower = df_ci["lower"].values
+            vol_upper = df_ci["upper"].values
 
-         #Calcul de la VaR
-         var_lower = - nominal * vol_lower * q * student_factor *(-1) 
-         var_upper = - nominal * vol_upper * q * student_factor *(-1) 
-         
-         var_ci_dict[model_name] = pd.DataFrame(
-             {"lower": var_lower, 
-              "upper": var_upper},
-             index=alpha_index
-         )    
-         
+            #Calcul de la VaR
+            var_lower = - nominal * vol_lower * q * student_factor *(-1) 
+            var_upper = - nominal * vol_upper * q * student_factor *(-1) 
+            
+            var_ci_dict[model_name] = pd.DataFrame(
+                {"lower": var_lower, 
+                "upper": var_upper},
+                index=alpha_index
+            )    
+            
     return var_ci_dict
